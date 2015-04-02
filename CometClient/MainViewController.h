@@ -4,12 +4,10 @@
 @interface MainViewController : UIViewController <UITextFieldDelegate, DDCometClientDelegate>
 {
 @private
-	DDCometClient *m_client;
-	UITextView *m_textView;
-	UITextField *m_textField;
+	DDCometClient *cometClient;
 }
 
-@property (nonatomic, assign) IBOutlet UITextView *textView;
-@property (nonatomic, assign) IBOutlet UITextField *textField;
+@property (nonatomic, weak) IBOutlet UITextView *textView;
+@property (nonatomic, weak) IBOutlet UITextField *textField;
 
 @end

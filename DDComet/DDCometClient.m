@@ -2,7 +2,7 @@
 #import "DDCometClient.h"
 #import <libkern/OSAtomic.h>
 #import <objc/message.h>
-#import "DDCometLongPollingTransport.h"
+#import "DDCometAFLongPollingTransport.h"
 #import "DDCometMessage.h"
 #import "DDCometSubscription.h"
 #import "DDConcurrentQueue.h"
@@ -112,7 +112,7 @@ static void * const delegateKey = (void*)&delegateKey;
 		m_incomingQueue = [[DDConcurrentQueue alloc] init];
         m_reconnectOnClientExpired = YES;
         m_persistentSubscriptions = YES;
-        _maxServerTimeDifference = kCometClientDefaultMaxTimestampDifference;
+//        _maxServerTimeDifference = kCometClientDefaultMaxTimestampDifference;
 	}
 	return self;
 }
@@ -127,14 +127,20 @@ static void * const delegateKey = (void*)&delegateKey;
 
 - (DDCometMessage *)handshake
 {
-	m_state = DDCometStateHandshaking;
-	
-	DDCometMessage *message = [DDCometMessage messageWithChannel:@"/meta/handshake"];
-	message.version = @"1.0";
-	message.supportedConnectionTypes = @[@"long-polling"];
+    return [self handshakeWithData:nil];
+}
 
-	[self sendMessage:message];
-	return message;
+- (DDCometMessage *)handshakeWithData:(NSDictionary *)data
+{
+    m_state = DDCometStateHandshaking;
+    
+    DDCometMessage *message = [DDCometMessage messageWithChannel:@"/meta/handshake"];
+    message.version = @"1.0";
+    message.supportedConnectionTypes = @[@"long-polling"];
+    message.data = data;
+    
+    [self sendMessage:message];
+    return message;
 }
 
 - (DDCometMessage *)disconnect
@@ -517,7 +523,7 @@ static void * const delegateKey = (void*)&delegateKey;
 	
 	if (m_transport == nil && m_endpointURL != nil)
 	{
-		m_transport = [[DDCometLongPollingTransport alloc] initWithClient:self];
+		m_transport = [[DDCometAFLongPollingTransport alloc] initWithClient:self];
 		[m_transport start];
 	}
 }

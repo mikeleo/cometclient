@@ -2,7 +2,7 @@
 #import <Foundation/Foundation.h>
 
 
-@class DDCometLongPollingTransport;
+@class DDCometAFLongPollingTransport;
 @class DDCometMessage;
 @class DDCometSubscription;
 @class DDQueueProcessor;
@@ -33,7 +33,7 @@ typedef enum
 	NSDictionary *m_advice;
 	id<DDQueue> m_outgoingQueue;
 	id<DDQueue> m_incomingQueue;
-	DDCometLongPollingTransport *m_transport;
+	DDCometAFLongPollingTransport *m_transport;
 	DDQueueProcessor *m_incomingProcessor;
     BOOL m_allowDuplicateSubscriptions;
     BOOL m_reconnectOnClientExpired;
@@ -59,6 +59,7 @@ typedef enum
 - (id)initWithURL:(NSURL *)endpointURL;
 - (void)scheduleInRunLoop:(NSRunLoop *)runLoop forMode:(NSString *)mode;
 - (DDCometMessage *)handshake;
+- (DDCometMessage *)handshakeWithData:(NSDictionary *)data;
 - (DDCometMessage *)disconnect;
 - (DDCometSubscription *)subscribeToChannel:(NSString *)channel target:(id)target selector:(SEL)selector;
 - (DDCometSubscription *)subscribeToChannel:(NSString *)channel target:(id)target selector:(SEL)selector delegate:(id<DDCometClientSubscriptionDelegate>)delegate;

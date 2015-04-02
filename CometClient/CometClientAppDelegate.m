@@ -13,16 +13,10 @@
 @implementation CometClientAppDelegate
 
 
-@synthesize window=_window;
-
-@synthesize mainViewController=_mainViewController;
-
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
 	// Override point for customization after application launch.
 	// Add the main view controller's view to the window and display.
-	self.window.rootViewController = self.mainViewController;
-	[self.window makeKeyAndVisible];
     return YES;
 }
 
@@ -65,11 +59,5 @@
 	 */
 }
 
-- (void)dealloc
-{
-	[_window release];
-	[_mainViewController release];
-    [super dealloc];
-}
 
 @end

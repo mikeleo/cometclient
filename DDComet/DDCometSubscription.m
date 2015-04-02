@@ -4,18 +4,13 @@
 
 @implementation DDCometSubscription
 
-@synthesize channel = m_channel,
-	target = m_target,
-	selector = m_selector,
-    delegate = m_delegate;
-
 - (id)initWithChannel:(NSString *)channel target:(id)target selector:(SEL)selector
 {
 	if ((self = [super init]))
 	{
-		m_channel = channel;
-		m_target = target;
-		m_selector = selector;
+		_channel = channel;
+		_target = target;
+		_selector = selector;
 	}
 	return self;
 }
@@ -24,7 +19,7 @@
 {
 	if ((self = [self initWithChannel:channel target:target selector:selector]))
 	{
-        m_delegate = delegate;
+        _delegate = delegate;
 	}
 	return self;
 }
@@ -32,17 +27,17 @@
 
 - (BOOL)matchesChannel:(NSString *)channel
 {
-	if ([m_channel isEqualToString:channel])
+	if ([_channel isEqualToString:channel])
 		return YES;
-	if ([m_channel hasSuffix:@"/**"])
+	if ([_channel hasSuffix:@"/**"])
 	{
-		NSString *prefix = [m_channel substringToIndex:([m_channel length] - 2)];
+		NSString *prefix = [_channel substringToIndex:([_channel length] - 2)];
         return [channel hasPrefix:prefix];
 	}
-	else if ([m_channel hasSuffix:@"/*"])
+	else if ([_channel hasSuffix:@"/*"])
 	{
-		NSString *prefix = [m_channel substringToIndex:([m_channel length] - 1)];
-		if ([channel hasPrefix:prefix] && [[channel substringFromIndex:([m_channel length] - 1)] rangeOfString:@"*"].location == NSNotFound)
+		NSString *prefix = [_channel substringToIndex:([_channel length] - 1)];
+		if ([channel hasPrefix:prefix] && [[channel substringFromIndex:([_channel length] - 1)] rangeOfString:@"*"].location == NSNotFound)
 			return YES;
 	}
 	return NO;
@@ -50,17 +45,17 @@
 
 -(BOOL)isWildcard
 {
-    return [m_channel hasSuffix:@"/*"] || [m_channel hasSuffix:@"/**"];
+    return [_channel hasSuffix:@"/*"] || [_channel hasSuffix:@"/**"];
 }
 
 -(BOOL)isParentChannel:(NSString*)channel
 {
     if ([channel hasSuffix:@"/*"]) {
         NSString *prefix = [channel substringToIndex:([channel length] - 1)];
-        return [m_channel hasPrefix:prefix] && [[m_channel substringFromIndex:([m_channel length] - 1)] rangeOfString:@"*"].location == NSNotFound;
+        return [_channel hasPrefix:prefix] && [[_channel substringFromIndex:([_channel length] - 1)] rangeOfString:@"*"].location == NSNotFound;
     } else if ([channel hasSuffix:@"/**"]) {
         NSString *prefix = [channel substringToIndex:([channel length] - 2)];
-        return [m_channel hasPrefix:prefix];
+        return [_channel hasPrefix:prefix];
     } else {
         return NO;
     }

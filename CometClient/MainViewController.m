@@ -6,29 +6,25 @@
 
 @implementation MainViewController
 
-@synthesize textView = m_textView,
-	textField = m_textField;
-
-- (void)dealloc
-{
-	[m_client release];
-	[super dealloc];
-}
 
 - (void)viewDidLoad
 {
-	if (m_client == nil)
+	if (cometClient== nil)
 	{
-		m_client = [[DDCometClient alloc] initWithURL:[NSURL URLWithString:@"http://localhost:8080/cometd"]];
-		m_client.delegate = self;
-		[m_client scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
-		[m_client handshake];
+		cometClient = [[DDCometClient alloc] initWithURL:[NSURL URLWithString:@"http://localhost:7881/cometd"]];
+		cometClient.delegate = self;
+		[cometClient scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
+    [cometClient handshakeWithData:    @{
+                                         @"staffId": @"",
+                                         @"token": @"bWxlb0B2b2NlcmEuY29tOjE0MjkxNDE2MTI2OTE6NGQ1MTA0ZWUtNzg1Ni00ODg0LWE1M2QtYTcwNDgxYWRlZDEyOmE3MGYwZTU3M2M0YjA1ZmU2NDNiNjU5MWQ4YjYxZGVj"
+                                         //@"token": @"bWlrZToxNDI5MTIwMTI1OTY2OmIyNjgxM2JmLTVlOTItNDlmNy1iYzNjLWFiNTFlMTU4M2JlZjo1NzUwMzk2MDY2ZjQ2NWU3NzNlZmRhMTA1ODAyNTEwNA"
+                                         }];
 	}
 }
 
 - (void)viewWillAppear:(BOOL)animated
 {
-	[m_textField becomeFirstResponder];
+	[_textField becomeFirstResponder];
 }
 
 - (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation
@@ -40,16 +36,16 @@
 
 - (BOOL)textFieldShouldReturn:(UITextField *)textField
 {
-	NSDictionary *data = [NSDictionary dictionaryWithObjectsAndKeys:m_textField.text, @"chat", @"iPhone user", @"user", nil];
-	[m_client publishData:data toChannel:@"/chat/demo"];
+	NSDictionary *data = [NSDictionary dictionaryWithObjectsAndKeys:_textField.text, @"chat", @"iPhone user", @"user", nil];
+	[cometClient publishData:data toChannel:@"/chat/demo"];
 	
-	m_textField.text = @"";
+	_textField.text = @"";
 	return YES;
 }
 
 - (void)appendText:(NSString *)text
 {
-	m_textView.text = [m_textView.text stringByAppendingFormat:@"%@\n", text];
+	_textView.text = [_textView.text stringByAppendingFormat:@"%@\n", text];
 }
 
 #pragma mark -
@@ -64,7 +60,7 @@
 	[client subscribeToChannel:@"/members/demo" target:self selector:@selector(membershipMessageReceived:)];
 	
 	NSDictionary *data = [NSDictionary dictionaryWithObjectsAndKeys:@"/chat/demo", @"room", @"iPhone user", @"user", nil];
-	[m_client publishData:data toChannel:@"/service/members"];
+	[cometClient publishData:data toChannel:@"/service/members"];
 }
 
 - (void)cometClient:(DDCometClient *)client handshakeDidFailWithError:(NSError *)error
