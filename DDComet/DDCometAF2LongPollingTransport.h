@@ -4,7 +4,7 @@
 
 @class DDCometClient;
 
-@interface DDCometAFLongPollingTransport : NSObject
+@interface DDCometAF2LongPollingTransport : NSObject
 
 - (id)initWithClient:(DDCometClient *)client;
 - (void)start;

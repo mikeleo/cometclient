@@ -1,5 +1,5 @@
 
-#import "DDCometAFLongPollingTransport.h"
+#import "DDCometURLConnectionLongPollingTransport.h"
 #import "DDCometClient.h"
 #import "DDCometMessage.h"
 #import "DDQueue.h"
@@ -8,13 +8,10 @@
 #define kConnectionTimeoutVariance 5
 #define kMinPollTime 0.020  // The minimum time between polls in seconds
 
-@interface DDCometAFLongPollingTransport ()
-    
-@property (nonatomic, weak) DDCometClient * cometClient;
-@property (nonatomic, assign) BOOL shouldCancel;
-
-@property (nonatomic, assign) BOOL polling;
-@property (nonatomic, strong) NSDate * lastPoll;
+@interface DDCometURLConnectionLongPollingTransport () {
+    volatile BOOL _polling;
+    volatile __strong NSDate * _lastPoll;
+}
 
 - (NSURLConnection *)sendMessages:(NSArray *)messages;
 - (NSArray *)outgoingMessages;
@@ -22,18 +19,17 @@
 
 @end
 
-@implementation DDCometAFLongPollingTransport
+@implementation DDCometURLConnectionLongPollingTransport
 static void * const responseDataKey = (void*)&responseDataKey;
 static void * const messagesKey = (void*)&messagesKey;
 static void * const timestampKey = (void*)&timestampKey;
-static void * const statusKey = (void*)&statusKey;
 
 - (id)initWithClient:(DDCometClient *)client
 {
 	if ((self = [super init]))
 	{
-		_cometClient = client;
-//		_responseDatas = [[NSMutableDictionary alloc] initWithCapacity:2];
+		m_client = client;
+//		m_responseDatas = [[NSMutableDictionary alloc] initWithCapacity:2];
 	}
 	return self;
 }
@@ -46,8 +42,8 @@ static void * const statusKey = (void*)&statusKey;
 
 - (void)cancel
 {
-	_shouldCancel = YES;
-    _cometClient = nil;
+	m_shouldCancel = YES;
+    m_client = nil;
 }
 
 #pragma mark -
@@ -62,12 +58,12 @@ static void * const statusKey = (void*)&statusKey;
 			BOOL isPolling;
 			if ([messages count] == 0)
 			{
-				if (_cometClient.state == DDCometStateConnected && !_polling && (!_lastPoll || fabs([_lastPoll timeIntervalSinceNow]) > kMinPollTime))
+				if (m_client.state == DDCometStateConnected && !_polling && (!_lastPoll || fabs([_lastPoll timeIntervalSinceNow]) > kMinPollTime))
 				{
 					isPolling = YES;
                     _polling = YES;
 					DDCometMessage *message = [DDCometMessage messageWithChannel:@"/meta/connect"];
-					message.clientID = _cometClient.clientID;
+					message.clientID = m_client.clientID;
 					message.connectionType = @"long-polling";
 					NSLog(@"Sending long-poll message: %@", message);
 					messages = @[message];
@@ -88,9 +84,9 @@ static void * const statusKey = (void*)&statusKey;
 				{
 					if (isPolling)
 					{
-						if (_shouldCancel)
+						if (m_shouldCancel)
 						{
-							_shouldCancel = NO;
+							m_shouldCancel = NO;
 							[connection cancel];
 						}
 						else
@@ -100,9 +96,10 @@ static void * const statusKey = (void*)&statusKey;
 						}
 					}
 				}
+            NSLog(@"Break loop");
 			}
 		}
-	} while (_cometClient.state != DDCometStateDisconnected && !_shouldCancel);
+	} while (m_client.state != DDCometStateDisconnected && !m_shouldCancel);
 }
 
 - (NSURLConnection *)sendMessages:(NSArray *)messages
@@ -121,6 +118,10 @@ static void * const statusKey = (void*)&statusKey;
 			[connection start];
 		}
 	}
+    else
+        {
+        //NSLog(@"Empty messages count");
+        }
 	return connection;
 }
 
@@ -128,7 +129,7 @@ static void * const statusKey = (void*)&statusKey;
 {
 	NSMutableArray *messages = [NSMutableArray array];
 	DDCometMessage *message;
-	id<DDQueue> outgoingQueue = [_cometClient outgoingQueue];
+	id<DDQueue> outgoingQueue = [m_client outgoingQueue];
 	while ((message = [outgoingQueue removeObject]))
 		[messages addObject:message];
 	return messages;
@@ -136,7 +137,7 @@ static void * const statusKey = (void*)&statusKey;
 
 - (NSURLRequest *)requestWithMessages:(NSArray *)messages
 {
-	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:_cometClient.endpointURL];
+	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:m_client.endpointURL];
 	
     NSError *error;
     NSMutableArray *msgArr = [NSMutableArray arrayWithCapacity:messages.count];
@@ -156,7 +157,7 @@ static void * const statusKey = (void*)&statusKey;
 
 -(NSTimeInterval)timeoutInterval
 {
-    NSNumber *timeout = (_cometClient.advice)[@"timeout"];
+    NSNumber *timeout = (m_client.advice)[@"timeout"];
 	if (timeout)
         return (([timeout floatValue] / 1000) + kConnectionTimeoutVariance);
     else
@@ -167,8 +168,6 @@ static void * const statusKey = (void*)&statusKey;
 
 - (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
 {
-    NSInteger * lastStatusCode = [((NSHTTPURLResponse *)response) statusCode];
-    objc_setAssociatedObject(connection, &statusKey, [NSNumber numberWithInteger:lastStatusCode], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(connection, &responseDataKey, [NSMutableData data], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
@@ -182,30 +181,16 @@ static void * const statusKey = (void*)&statusKey;
 {
 	NSData *responseData = objc_getAssociatedObject(connection, &responseDataKey);
     NSArray * messages = objc_getAssociatedObject(connection, &messagesKey);
-    NSNumber * statusCode = objc_getAssociatedObject(connection, &statusKey);
-    
     objc_setAssociatedObject(connection, &responseDataKey, nil, OBJC_ASSOCIATION_ASSIGN);
     objc_setAssociatedObject(connection, &messagesKey, nil, OBJC_ASSOCIATION_ASSIGN);
     objc_setAssociatedObject(connection, &timestampKey, nil, OBJC_ASSOCIATION_ASSIGN);
-    objc_setAssociatedObject(connection, &statusKey, nil, OBJC_ASSOCIATION_ASSIGN);
-    
     NSError *error;
 	NSArray *responses = [NSJSONSerialization JSONObjectWithData:responseData options:kNilOptions error:&error];
 
 	responseData = nil;
-    
-    if ([responses count] == 0 && [statusCode integerValue] == 403)
-        {
-        NSDictionary * message =
-        @{
-          @"channel": @"/meta/handshake",
-          @"successful": @"NO"
-        };
-        responses = @[message];
-        }
-    
-    if (_cometClient) {
-        id<DDQueue> incomingQueue = [_cometClient incomingQueue];
+	
+    if (m_client) {
+        id<DDQueue> incomingQueue = [m_client incomingQueue];
 
         for (NSDictionary *messageData in responses)
         {
@@ -215,7 +200,7 @@ static void * const statusKey = (void*)&statusKey;
             }
             [incomingQueue addObject:message];
         }
-        [_cometClient messagesDidSend:messages];
+        [m_client messagesDidSend:messages];
     }
 }
 
@@ -229,8 +214,8 @@ static void * const statusKey = (void*)&statusKey;
     objc_setAssociatedObject(connection, &messagesKey, nil, OBJC_ASSOCIATION_ASSIGN);
     objc_setAssociatedObject(connection, &timestampKey, nil, OBJC_ASSOCIATION_ASSIGN);
     //If the time since connect is greater than the timeout interval, it means we were in the background and should ignore the connection failure
-    if (_cometClient && sinceConnect < connection.originalRequest.timeoutInterval) {
-        [_cometClient connectionFailed:connection withError:error withMessages:messages];
+    if (m_client && sinceConnect < connection.originalRequest.timeoutInterval) {
+        [m_client connectionFailedWithError:error withMessages:messages];
     }
 }
 

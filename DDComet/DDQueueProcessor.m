@@ -3,72 +3,41 @@
 #import <objc/message.h>
 
 
-void DDQueueProcessorPerform(void *info);
+@interface DDQueueProcessor ()
 
-@implementation DDQueueProcessor
-
-+ (DDQueueProcessor *)queueProcessorWithQueue:(id<DDQueue>)queue
-									   target:(id)target
-									 selector:(SEL)selector
-{
-	DDQueueProcessor *processor = [[DDQueueProcessor alloc] initWithTarget:target selector:selector];
-	[queue setDelegate:processor];
-	[processor scheduleInRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
-	return processor;
-}
-
-- (id)initWithTarget:(id)target selector:(SEL)selector
-{
-	if ((self = [super init]))
-	{
-		m_target = target;
-		m_selector = selector;
-		
-		CFRunLoopSourceContext context =
-		{
-			0, (__bridge void *)(self), NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-			DDQueueProcessorPerform
-		};
-		
-		m_source = CFRunLoopSourceCreate(NULL, 0, &context);
-	}
-	return self;
-}
-
-- (void)dealloc
-{
-	if (m_runLoop)
-		CFRunLoopRemoveSource([m_runLoop getCFRunLoop], m_source, (__bridge CFStringRef)m_mode);
-
-	CFRelease(m_source);
-}
-
-- (void)scheduleInRunLoop:(NSRunLoop *)runLoop forMode:(NSString *)mode
-{
-	@synchronized(self)
-	{
-		CFRunLoopAddSource([runLoop getCFRunLoop], m_source, (__bridge CFStringRef)mode);
-		m_runLoop = runLoop;
-		m_mode = mode;
-	}
-}
-
-- (void)queueDidAddObject:(id<DDQueue>)queue
-{
-	CFRunLoopSourceSignal(m_source);
-	CFRunLoopWakeUp([m_runLoop getCFRunLoop]);
-}
-
-- (void)makeTargetPeformSelector
-{
-    objc_msgSend(m_target, m_selector);
-//	[m_target performSelector:m_selector];
-}
+@property (nonatomic, strong) NSOperationQueue * operationQueue;
 
 @end
 
-void DDQueueProcessorPerform(void *info)
+@implementation DDQueueProcessor
+
+- (id)initWithDelegate:(id<DDQueueProcessorDelegate>)delegate
 {
-	DDQueueProcessor *processor = (__bridge DDQueueProcessor *)(info);
-	[processor makeTargetPeformSelector];
+    self = [super init];
+    if (self)
+        {
+        self.delegate = delegate;
+        self.operationQueue = [[NSOperationQueue alloc] init];
+        self.operationQueue.maxConcurrentOperationCount = 1;
+        }
+    return self;
 }
+
+
+- (void)queueDidAddObject:(id<DDQueue>)queue
+{
+    typeof(self) weakSelf = self;
+    [self.operationQueue addOperationWithBlock:^{
+        typeof(weakSelf) strongSelf = weakSelf;
+        
+        if ([strongSelf.delegate respondsToSelector:@selector(processIncomingMessages)])
+            {
+            dispatch_async([self.delegate dispatchQueue] ? [self.delegate dispatchQueue] : dispatch_get_main_queue(), ^{
+                [strongSelf.delegate processIncomingMessages];
+            });
+            }
+    }];
+}
+
+
+@end

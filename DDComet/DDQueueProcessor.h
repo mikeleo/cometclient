@@ -2,21 +2,18 @@
 #import <Foundation/Foundation.h>
 #import "DDQueue.h"
 
+@protocol DDQueueProcessorDelegate <NSObject>
+
+- (dispatch_queue_t) dispatchQueue;
+
+- (void) processIncomingMessages;
+
+@end
 
 @interface DDQueueProcessor : NSObject <DDQueueDelegate>
-{
-@private
-	id m_target;
-	SEL m_selector;
-	CFRunLoopSourceRef m_source;
-	NSRunLoop *m_runLoop;
-	NSString *m_mode;
-}
 
-+ (DDQueueProcessor *)queueProcessorWithQueue:(id<DDQueue>)queue
-									   target:(id)target
-									 selector:(SEL)selector;
-- (id)initWithTarget:(id)target selector:(SEL)selector;
-- (void)scheduleInRunLoop:(NSRunLoop *)runLoop forMode:(NSString *)mode;
+@property (nonatomic, weak) id<DDQueueProcessorDelegate> delegate;
+
+- (id)initWithDelegate:(id<DDQueueProcessorDelegate>) delegate;
 
 @end

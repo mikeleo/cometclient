@@ -56,7 +56,7 @@ static __strong NSDateFormatter* FMT;
 - (NSString *)bayeuxFormat
 {
 	NSString *args = @"";
-	NSArray *components = @[[NSString stringWithFormat:@"%d", [self code]], args, [self localizedDescription]];
+	NSArray *components = @[[NSString stringWithFormat:@"%ld", (long)[self code]], args, [self localizedDescription]];
 	return [components componentsJoinedByString:@":"];
 }
 

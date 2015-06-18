@@ -4,12 +4,7 @@
 
 @class DDCometClient;
 
-@interface DDCometLongPollingTransport : NSObject
-{
-@private
-	DDCometClient *m_client;
-	volatile BOOL m_shouldCancel;
-}
+@protocol DDCometLongPollingTransport <NSObject>
 
 - (id)initWithClient:(DDCometClient *)client;
 - (void)start;
