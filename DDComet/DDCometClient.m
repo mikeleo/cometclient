@@ -6,7 +6,6 @@
 #import "DDCometMessage.h"
 #import "DDCometSubscription.h"
 #import "DDConcurrentQueue.h"
-#import "DDQueueProcessor.h"
 
 #define kCometErrorClientNotFound 402
 
@@ -96,7 +95,7 @@ static void * const delegateKey = (void*)&delegateKey;
 @end
 
 #pragma mark - DDCometClient
-@interface DDCometClient () <DDQueueProcessorDelegate>
+@interface DDCometClient () <DDQueueDelegate>
 {
 @private
     volatile int32_t m_messageCounter;
@@ -107,7 +106,6 @@ static void * const delegateKey = (void*)&delegateKey;
     id<DDQueue> m_outgoingQueue;
     id<DDQueue> m_incomingQueue;
     id<DDCometLongPollingTransport> m_transport;
-    DDQueueProcessor *m_incomingProcessor;
     BOOL m_allowDuplicateSubscriptions;
     BOOL m_reconnectOnClientExpired;
     BOOL m_persistentSubscriptions;
@@ -155,8 +153,7 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
 
 - (void)scheduleInRunLoop:(NSRunLoop *)runLoop forMode:(NSString *)mode
 {
-    m_incomingProcessor = [[DDQueueProcessor alloc] initWithDelegate:self];
-    [m_incomingQueue setDelegate:m_incomingProcessor];
+    [m_incomingQueue setDelegate:self];
 }
 
 - (DDCometMessage *)handshake
@@ -918,19 +915,17 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
     
 }
 
-#pragma mark - DDQueueProcessorDelegate
-
-- (void)processIncomingMessages
+#pragma mark - DDQueueDelegate
+- (void)queueDidAddObject:(id<DDQueue>)queue
 {
-    DDCometMessage *message;
-    while ((message = [m_incomingQueue removeObject]))
-        [self handleMessage:message];
-}
-
-
-- (dispatch_queue_t)dispatchQueue
-{
-    return dispatchQueue;
+    if (queue == m_incomingQueue)
+        {
+            dispatch_async(dispatchQueue, ^{
+                DDCometMessage *message;
+                while ((message = [m_incomingQueue removeObject]))
+                    [self handleMessage:message];
+            });
+        }
 }
 
 @end

@@ -4,7 +4,6 @@
 
 @class DDCometMessage;
 @class DDCometSubscription;
-@class DDQueueProcessor;
 @protocol DDCometClientDelegate;
 @protocol DDQueue;
 @protocol DDCometLongPollingTransport;

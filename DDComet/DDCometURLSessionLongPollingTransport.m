@@ -1,9 +1,10 @@
-
+/**
+ *  Copyright 2015 - Michael Leo (michael.leo@gmail.com)
+ */
 #import "DDCometURLSessionLongPollingTransport.h"
 #import "DDCometClient.h"
 #import "DDCometMessage.h"
 #import "DDQueue.h"
-#import "DDQueueProcessor.h"
 
 
 #define kDefaultConnectionTimeout 60.0
@@ -58,7 +59,17 @@
 
 - (void)dealloc
 {
-    [_cometClient removeObserver:self forKeyPath:@"state"];
+    if (_cometClient != nil)
+        {
+        @try
+            {
+            [_cometClient removeObserver:self forKeyPath:@"state"];
+            }
+        @catch(id anException)
+            {
+            //do nothing.  It wad previ
+            }
+        }
 }
 
 - (void)start
@@ -92,7 +103,11 @@
 
 - (void)queueDidAddObject:(id<DDQueue>)queue
 {
-    [self processMessages];
+    typeof(self) weakSelf = self;
+    [self.operationQueue addOperationWithBlock:^{
+        typeof(weakSelf) strongSelf = weakSelf;
+        [strongSelf processMessages];
+    }];
 }
 
 #pragma mark -
@@ -155,12 +170,14 @@
     //3. Send all the messages
     for (NSArray * messages in messagesList)
         {
-        NSURLSessionDataTask *sessionDataTask = [self sendMessages:messages
-                                                           success:^(NSURLSessionDataTask *task, id responseObject, NSDate *timeStamp, NSArray *messages) {
-                                                               [self connectionDidFinishWithSuccess:task responseObject:responseObject timeStamp:timeStamp messages:messages];
-                                                           } failure:^(NSURLSessionDataTask *task, NSError *error, NSDate *timeStamp, NSArray *messages) {
-                                                                [self connectionDidFinishWithError:task error:error timeStamp:timeStamp messages:messages];
-                                                           }];
+        NSURLSessionDataTask *sessionDataTask =
+            [self sendMessages:messages
+               success:^(NSURLSessionDataTask *task, id responseObject, NSDate *timeStamp, NSArray *messages) {
+                   [self connectionDidFinishWithSuccess:task responseObject:responseObject timeStamp:timeStamp messages:messages];
+               } failure:^(NSURLSessionDataTask *task, NSError *error, NSDate *timeStamp, NSArray *messages) {
+                    [self connectionDidFinishWithError:task error:error timeStamp:timeStamp messages:messages];
+               }];
+        
         if (sessionDataTask)
             {
                 @synchronized(_sessionTasks)
