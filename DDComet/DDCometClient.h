@@ -42,9 +42,11 @@ typedef enum
 //     If set to YES (default) and you would need to call 'unsubscribeAll' after calling 'disconnect' if you don't want subscriptions to resubscribe automatically when 'handshake' is called
 @property (nonatomic, assign) BOOL persistentSubscriptions; // Default to YES
 
-- (id)initWithURL:(NSURL *)endpointURL;
+@property (nonatomic, strong) NSDictionary * handshakeData;
 
-- (void)scheduleInRunLoop:(NSRunLoop *)runLoop forMode:(NSString *)mode;
+@property (nonatomic, strong) dispatch_queue_t callbackQueue;
+
+- (id)initWithURL:(NSURL *)endpointURL;
 
 - (DDCometMessage *)handshake;
 

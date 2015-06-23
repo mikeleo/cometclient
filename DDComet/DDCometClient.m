@@ -2,6 +2,7 @@
 #import "DDCometClient.h"
 #import <libkern/OSAtomic.h>
 #import <objc/message.h>
+#import <objc/runtime.h>
 #import "DDCometLongPollingTransport.h"
 #import "DDCometMessage.h"
 #import "DDCometSubscription.h"
@@ -10,6 +11,8 @@
 #define kCometErrorClientNotFound 402
 
 static void * const delegateKey = (void*)&delegateKey;
+
+static char kAssociatedObjectKey;
 
 #pragma mark - DDCometBlockDataDelegate
 @interface DDCometBlockDataDelegate : NSObject<DDCometClientDataDelegate>
@@ -111,7 +114,6 @@ static void * const delegateKey = (void*)&delegateKey;
     BOOL m_persistentSubscriptions;
     
     dispatch_queue_t dispatchQueue;
-    NSDictionary * handshakeData;
 }
 
 @property (nonatomic, strong) NSURL * endpointURL;
@@ -141,6 +143,7 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
         m_subscriptions = [[NSMutableArray alloc] init];
         m_outgoingQueue = [[DDConcurrentQueue alloc] init];
         m_incomingQueue = [[DDConcurrentQueue alloc] init];
+        [m_incomingQueue setDelegate:self];
         m_reconnectOnClientExpired = YES;
         m_persistentSubscriptions = YES;
         dispatchQueue = dispatch_queue_create("ddcometclient.queue", DISPATCH_QUEUE_SERIAL);
@@ -151,29 +154,27 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
 }
 
 
-- (void)scheduleInRunLoop:(NSRunLoop *)runLoop forMode:(NSString *)mode
-{
-    [m_incomingQueue setDelegate:self];
-}
-
 - (DDCometMessage *)handshake
 {
-    return [self handshakeWithData:handshakeData];
+    return [self handshakeWithData:_handshakeData];
 }
 
 - (DDCometMessage *)handshakeWithData:(NSDictionary *)data
 {
     self.state = DDCometStateHandshaking;
 
-    if (handshakeData != data)
+    if (_handshakeData != data)
         {
-        handshakeData = data;
+        _handshakeData = data;
         }
     
     DDCometMessage *message = [DDCometMessage messageWithChannel:@"/meta/handshake"];
     message.version = @"1.0";
     message.supportedConnectionTypes = @[@"long-polling"];
-    message.data = data;
+    if (data != nil)
+        {
+        message.data = data;
+        }
     
     [self sendMessage:message];
     return message;
@@ -197,11 +198,14 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
 -(DDCometSubscription*) subscribeToChannel:(NSString *)channel target:(id)target selector:(SEL)selector {
     return [self subscribeToChannel:channel target:target selector:selector delegate:nil];
 }
+
 -(DDCometSubscription*) subscribeToChannel:(NSString *)channel target:(id)target selector:(SEL)selector successBlock:(void (^)(DDCometClient *, DDCometSubscription *))successBlock errorBlock:(void (^)(DDCometClient *, DDCometSubscription *, NSError *))errorBlock
 {
     if (errorBlock || successBlock) {
         DDCometBlockSubscriptionDelegate *delegate = [[DDCometBlockSubscriptionDelegate alloc] initWithSuccessBlock:successBlock errorBlock:errorBlock];
-        return [self subscribeToChannel:channel target:target selector:selector delegate:delegate];
+        DDCometSubscription * subscription = [self subscribeToChannel:channel target:target selector:selector delegate:delegate];
+        objc_setAssociatedObject(subscription, &kAssociatedObjectKey, delegate, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        return subscription;
     } else {
         return [self subscribeToChannel:channel target:target selector:selector delegate:nil];
     }
@@ -615,7 +619,7 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
                 [self sendMessage:connectMessage];
                 if (m_delegate && [m_delegate respondsToSelector:@selector(cometClientHandshakeDidSucceed:)])
                     {
-                    dispatch_async(dispatch_get_main_queue(), ^{
+                    dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
                         [m_delegate cometClientHandshakeDidSucceed:self];
                     });
                     }
@@ -625,7 +629,7 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
                 [self handleDisconnection];
                 if (m_delegate && [m_delegate respondsToSelector:@selector(cometClient:handshakeDidFailWithError:)])
                     {
-                    dispatch_async(dispatch_get_main_queue(), ^{
+                    dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
                         [m_delegate cometClient:self handshakeDidFailWithError:message.error];
                     });
                     }
@@ -644,7 +648,7 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
                 [self handleDisconnection];
                 if (m_state == DDCometStateConnecting && m_delegate && [m_delegate respondsToSelector:@selector(cometClient:connectDidFailWithError:)])
                     {
-                    dispatch_async(dispatch_get_main_queue(), ^{
+                    dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
                         [m_delegate cometClient:self connectDidFailWithError:message.error];
                     });
                     }
@@ -658,7 +662,7 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
                     }
                     if (m_delegate && [m_delegate respondsToSelector:@selector(cometClientExpired:)])
                         {
-                        dispatch_async(dispatch_get_main_queue(), ^{
+                        dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
                             [m_delegate cometClientExpired:self];
                         });
                         }
@@ -668,7 +672,7 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
                 {
                 if (m_state == DDCometStateTransportError && m_delegate && [m_delegate respondsToSelector:@selector(cometClientContinuedReceivingMessages:)]) {
                     {
-                    dispatch_async(dispatch_get_main_queue(), ^{
+                    dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
                         [m_delegate cometClientContinuedReceivingMessages:self];
                     });
                     }
@@ -687,7 +691,7 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
                 
                 if (m_delegate && [m_delegate respondsToSelector:@selector(cometClientConnectDidSucceed:)])
                     {
-                    dispatch_async(dispatch_get_main_queue(), ^{
+                    dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
                         [m_delegate cometClientConnectDidSucceed:self];
                     });
                     }
@@ -699,7 +703,7 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
                 self.state = DDCometStateConnected;
                 if (m_delegate && [m_delegate respondsToSelector:@selector(cometClientContinuedReceivingMessages:)])
                     {
-                    dispatch_async(dispatch_get_main_queue(), ^{
+                    dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
                         [m_delegate cometClientContinuedReceivingMessages:self];
                     });
                     }
@@ -722,7 +726,7 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
                             id<DDCometClientSubscriptionDelegate> localDelegate = subscription.delegate?subscription.delegate:m_delegate;
                             if(localDelegate && [localDelegate respondsToSelector:@selector(cometClient:subscription:didFailWithError:)])
                                 {
-                                dispatch_async(dispatch_get_main_queue(), ^{
+                                dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
                                     [localDelegate cometClient:self subscription:subscription didFailWithError:message.error];
                                 });
                                 }
@@ -733,7 +737,7 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
                             [m_subscriptions addObject:subscription];
                             if (localDelegate && [localDelegate respondsToSelector:@selector(cometClient:subscriptionDidSucceed:)])
                                 {
-                                dispatch_async(dispatch_get_main_queue(), ^{
+                                dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
                                     [localDelegate cometClient:self subscriptionDidSucceed:subscription];
                                 });
                                 }
@@ -743,7 +747,7 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
                         self.state = DDCometStateConnected;
                         if (m_delegate && [m_delegate respondsToSelector:@selector(cometClientContinuedReceivingMessages:)])
                             {
-                            dispatch_async(dispatch_get_main_queue(), ^{
+                            dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
                                 [m_delegate cometClientContinuedReceivingMessages:self];
                             });
                             }
@@ -763,7 +767,7 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
             self.state = DDCometStateConnected;
             if (m_delegate && [m_delegate respondsToSelector:@selector(cometClientContinuedReceivingMessages:)])
                 {
-                dispatch_async(dispatch_get_main_queue(), ^{
+                dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
                     [m_delegate cometClientContinuedReceivingMessages:self];
                 });
                 }
@@ -786,7 +790,7 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
                 }
             if ([subscription.target respondsToSelector:subscription.selector])
                 {
-                dispatch_async(dispatch_get_main_queue(), ^{
+                dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
                     IMP imp = [subscription.target methodForSelector:subscription.selector];
                     void (*func)(id, SEL, DDCometMessage *) = (void *)imp;
                     func(subscription.target, subscription.selector, message);
@@ -834,7 +838,9 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
 
 -(void)connectionFailedWithError:(NSError *)error withMessages:(NSArray *)messages {
     if (m_state == DDCometStateConnected && m_delegate && [m_delegate respondsToSelector:@selector(cometClient:stoppedReceivingMessagesWithError:)]) {
-        [m_delegate cometClient:self stoppedReceivingMessagesWithError:error];
+        dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
+            [m_delegate cometClient:self stoppedReceivingMessagesWithError:error];
+        });
     }
     self.state = DDCometStateTransportError;
     
@@ -843,7 +849,9 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
     }
     
     if (m_delegate && [m_delegate respondsToSelector:@selector(cometClient:didFailWithTransportError:)]) {
-        [m_delegate cometClient:self didFailWithTransportError:error];
+        dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
+            [m_delegate cometClient:self didFailWithTransportError:error];
+        });
     }
 }
 
@@ -855,13 +863,17 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
         if ([channel isEqualToString:@"/meta/handshake"])
             {
             if (m_delegate && [m_delegate respondsToSelector:@selector(cometClient:handshakeDidFailWithError:)]) {
-                [m_delegate cometClient:self handshakeDidFailWithError:error];
+                dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
+                    [m_delegate cometClient:self handshakeDidFailWithError:error];
+                });
             }
             }
         else if ([channel isEqualToString:@"/meta/connect"])
             {
             if (m_state == DDCometStateConnecting && m_delegate && [m_delegate respondsToSelector:@selector(cometClient:connectDidFailWithError:)]) {
-                [m_delegate cometClient:self connectDidFailWithError:error];
+                dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
+                    [m_delegate cometClient:self connectDidFailWithError:error];
+                });
             }
             }
         else if ([channel isEqualToString:@"/meta/unsubscribe"] || [channel isEqualToString:@"/meta/disconnect"])
@@ -877,7 +889,9 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
                     for (DDCometSubscription *subscription in subscriptions) {
                         id<DDCometClientSubscriptionDelegate> localDelegate = subscription.delegate?subscription.delegate:m_delegate;
                         if (localDelegate && [localDelegate respondsToSelector:@selector(cometClient:subscription:didFailWithError:)]) {
-                            [localDelegate cometClient:self subscription:subscription didFailWithError:error];
+                            dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
+                                [localDelegate cometClient:self subscription:subscription didFailWithError:error];
+                            });
                         }
                     }
                 }
@@ -894,9 +908,13 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
             objc_setAssociatedObject(message, delegateKey, nil, OBJC_ASSOCIATION_ASSIGN);
         }
         if (dataDelegate && [dataDelegate respondsToSelector:@selector(cometClient:data:toChannel:didFailWithError:)]) {
-            [dataDelegate cometClient:self data:message.data toChannel:message.channel didFailWithError:error];
+            dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
+                [dataDelegate cometClient:self data:message.data toChannel:message.channel didFailWithError:error];
+            });
         } else if (m_delegate && [m_delegate respondsToSelector:@selector(cometClient:data:toChannel:didFailWithError:)]) {
-            [m_delegate cometClient:self data:message.data toChannel:message.channel didFailWithError:error];
+            dispatch_async(_callbackQueue ? _callbackQueue : dispatch_get_main_queue(), ^{
+                [m_delegate cometClient:self data:message.data toChannel:message.channel didFailWithError:error];
+            });
         }
         }
     
@@ -920,7 +938,7 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
 {
     if (queue == m_incomingQueue)
         {
-            dispatch_async(dispatchQueue, ^{
+            dispatch_async(_callbackQueue ? _callbackQueue : dispatchQueue, ^{
                 DDCometMessage *message;
                 while ((message = [m_incomingQueue removeObject]))
                     [self handleMessage:message];
