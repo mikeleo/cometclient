@@ -139,7 +139,7 @@ extern void DDCometLog(NSString *format, ...);
     message.supportedConnectionTypes = connectionTypes;
     if (data != nil)
         {
-        message.data = data;
+        message.ext = data;
         }
     
     [self sendMessage:message];
