@@ -7,6 +7,7 @@ xcodeproj 'CometClient'
 
 
 pod 'Reachability'
+pod 'SocketRocket', '~> 0.3.1-beta2'
 
 post_install do |installer|
     installer.project.targets.each do |target|

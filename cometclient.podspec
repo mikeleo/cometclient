@@ -110,4 +110,6 @@ Pod::Spec.new do |s|
   # s.xcconfig = { "HEADER_SEARCH_PATHS" => "$(SDKROOT)/usr/include/libxml2" }
   #  s.dependency 'CocoaLumberjack',  '~> 1.7.0'
 
+  s.dependency 'SocketRocket', '~> 0.3.1-beta2'
+
 end

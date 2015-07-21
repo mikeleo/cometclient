@@ -34,6 +34,7 @@
 		7A1BD8EA1ACC311F00FDF0BD /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 7A1BD8E71ACC311F00FDF0BD /* Main.storyboard */; };
 		7A1BD8EB1ACC311F00FDF0BD /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7A1BD8E81ACC311F00FDF0BD /* Images.xcassets */; };
 		7A1BD8EC1ACC311F00FDF0BD /* LaunchScreen.xib in Resources */ = {isa = PBXBuildFile; fileRef = 7A1BD8E91ACC311F00FDF0BD /* LaunchScreen.xib */; };
+		7A83825E1B3CA02600F9FCE4 /* DDCometWebSocketTransport.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A83825D1B3CA02600F9FCE4 /* DDCometWebSocketTransport.m */; };
 		7AFD43281B2F660100A27BFA /* DDCometURLSessionLongPollingTransport.m in Sources */ = {isa = PBXBuildFile; fileRef = 7AFD43271B2F660100A27BFA /* DDCometURLSessionLongPollingTransport.m */; };
 /* End PBXBuildFile section */
 
@@ -90,6 +91,8 @@
 		7A1BD8E81ACC311F00FDF0BD /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Images.xcassets; sourceTree = "<group>"; };
 		7A1BD8E91ACC311F00FDF0BD /* LaunchScreen.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = LaunchScreen.xib; sourceTree = "<group>"; };
 		7A1BD8ED1ACC73B000FDF0BD /* DDCometURLSessionLongPollingTransport.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = DDCometURLSessionLongPollingTransport.h; path = DDComet/DDCometURLSessionLongPollingTransport.h; sourceTree = "<group>"; };
+		7A83825C1B3CA02600F9FCE4 /* DDCometWebSocketTransport.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = DDCometWebSocketTransport.h; path = DDComet/DDCometWebSocketTransport.h; sourceTree = "<group>"; };
+		7A83825D1B3CA02600F9FCE4 /* DDCometWebSocketTransport.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = DDCometWebSocketTransport.m; path = DDComet/DDCometWebSocketTransport.m; sourceTree = "<group>"; };
 		7AFD43271B2F660100A27BFA /* DDCometURLSessionLongPollingTransport.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = DDCometURLSessionLongPollingTransport.m; path = DDComet/DDCometURLSessionLongPollingTransport.m; sourceTree = "<group>"; };
 		F7F43782D4E158B3F04D290A /* Pods.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = Pods.release.xcconfig; path = "Pods/Target Support Files/Pods/Pods.release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -212,6 +215,8 @@
 				7A1B89CE1B3089CA00868936 /* DDCometURLConnectionLongPollingTransport.m */,
 				7A1BD8ED1ACC73B000FDF0BD /* DDCometURLSessionLongPollingTransport.h */,
 				7AFD43271B2F660100A27BFA /* DDCometURLSessionLongPollingTransport.m */,
+				7A83825C1B3CA02600F9FCE4 /* DDCometWebSocketTransport.h */,
+				7A83825D1B3CA02600F9FCE4 /* DDCometWebSocketTransport.m */,
 				46569000132C27BD004086EE /* DDCometMessage.h */,
 				46569001132C27BD004086EE /* DDCometMessage.m */,
 				7A1B89D11B3276E200868936 /* DDConcurrentQueue.h */,
@@ -389,6 +394,7 @@
 				46568FAF132C01AD004086EE /* MainViewController.m in Sources */,
 				7A1B89D31B3276E200868936 /* DDConcurrentQueue.m in Sources */,
 				46568FFE132C0500004086EE /* DDCometClient.m in Sources */,
+				7A83825E1B3CA02600F9FCE4 /* DDCometWebSocketTransport.m in Sources */,
 				46569002132C27BD004086EE /* DDCometMessage.m in Sources */,
 				4656900A132DA5FF004086EE /* DDCometSubscription.m in Sources */,
 				7A1B89CF1B3089CA00868936 /* DDCometURLConnectionLongPollingTransport.m in Sources */,

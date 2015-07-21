@@ -152,8 +152,11 @@ static __strong NSDateFormatter* FMT;
 	if (m_timestamp)
 		dict[@"timestamp"] = [m_timestamp ISO8601Representation];
 	if (m_data) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wundeclared-selector"
         if ([m_data respondsToSelector:@selector(asDictionary)]) {
             dict[@"data"] = [m_data performSelector:@selector(asDictionary)];
+#pragma clang diagnostic pop
         } else {
             dict[@"data"] = m_data;
         }

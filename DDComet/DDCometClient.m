@@ -170,7 +170,7 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
     
     DDCometMessage *message = [DDCometMessage messageWithChannel:@"/meta/handshake"];
     message.version = @"1.0";
-    message.supportedConnectionTypes = @[@"long-polling"];
+    message.supportedConnectionTypes = @[@"websocket"];
     if (data != nil)
         {
         message.data = data;
@@ -563,7 +563,9 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
     
     if (m_transport == nil && _endpointURL != nil)
         {
-        m_transport = [[NSClassFromString(@"DDCometURLSessionLongPollingTransport") alloc] initWithClient:self];
+        //m_transport = [[NSClassFromString(@"DDCometURLSessionLongPollingTransport") alloc] initWithClient:self];
+        m_transport = [[NSClassFromString(@"DDCometWebSocketTransport") alloc] initWithClient:self];
+        
         if ([m_transport conformsToProtocol:@protocol(DDQueueDelegate) ])
             {
             id<DDQueueDelegate> delegate = (id<DDQueueDelegate>)m_transport;
@@ -615,7 +617,7 @@ reconnectOnClientExpired = m_reconnectOnClientExpired;
                 m_clientID = message.clientID;
                 self.state = DDCometStateConnecting;
                 DDCometMessage *connectMessage = [DDCometMessage messageWithChannel:@"/meta/connect"];
-                connectMessage.connectionType = @"long-polling";
+                connectMessage.connectionType = @"websocket";
                 [self sendMessage:connectMessage];
                 if (m_delegate && [m_delegate respondsToSelector:@selector(cometClientHandshakeDidSucceed:)])
                     {

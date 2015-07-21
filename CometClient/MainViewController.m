@@ -24,7 +24,6 @@
         {
         cometClient = [[DDCometClient alloc] initWithURL:[NSURL URLWithString:[NSString stringWithFormat:@"%@cometd", BASE_URL]]];
         cometClient.delegate = self;
-        [cometClient scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
         
         [cometClient addObserver:self forKeyPath:@"state" options:(NSKeyValueObservingOptionNew) context:nil];
         }
