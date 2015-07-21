@@ -61,7 +61,7 @@
 		46568FA8132C01AD004086EE /* CometClientAppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CometClientAppDelegate.m; sourceTree = "<group>"; };
 		46568FAD132C01AD004086EE /* MainViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MainViewController.h; sourceTree = "<group>"; };
 		46568FAE132C01AD004086EE /* MainViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MainViewController.m; sourceTree = "<group>"; };
-		46568FBC132C01AD004086EE /* CometClientTests.octest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CometClientTests.octest; sourceTree = BUILT_PRODUCTS_DIR; };
+		46568FBC132C01AD004086EE /* CometClientTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CometClientTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		46568FC4132C01AD004086EE /* CometClientTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "CometClientTests-Info.plist"; sourceTree = "<group>"; };
 		46568FC6132C01AD004086EE /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		46568FC8132C01AD004086EE /* CometClientTests-Prefix.pch */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CometClientTests-Prefix.pch"; sourceTree = "<group>"; };
@@ -141,7 +141,7 @@
 			isa = PBXGroup;
 			children = (
 				46568F94132C01AD004086EE /* CometClient.app */,
-				46568FBC132C01AD004086EE /* CometClientTests.octest */,
+				46568FBC132C01AD004086EE /* CometClientTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -281,7 +281,7 @@
 			);
 			name = CometClientTests;
 			productName = CometClientTests;
-			productReference = 46568FBC132C01AD004086EE /* CometClientTests.octest */;
+			productReference = 46568FBC132C01AD004086EE /* CometClientTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
