@@ -24,6 +24,7 @@
         {
         cometClient = [[DDCometClient alloc] initWithURL:[NSURL URLWithString:[NSString stringWithFormat:@"%@cometd", BASE_URL]]];
         cometClient.delegate = self;
+        cometClient.supportedTransports =  DDCometWebSocketSupportedTransport | DDCometLongPollingSupportedTransport;
         
         [cometClient addObserver:self forKeyPath:@"state" options:(NSKeyValueObservingOptionNew) context:nil];
         }

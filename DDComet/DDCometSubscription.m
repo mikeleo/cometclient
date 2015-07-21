@@ -1,6 +1,6 @@
 
 #import "DDCometSubscription.h"
-
+#import "DDCometClient.h"
 
 @implementation DDCometSubscription
 

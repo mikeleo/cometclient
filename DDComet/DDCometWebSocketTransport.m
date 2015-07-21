@@ -1,3 +1,4 @@
+
 //
 //  DDCometWebSecontTransport.m
 //  CometClient
@@ -7,14 +8,16 @@
 //
 
 #import "DDCometWebSocketTransport.h"
-#import "DDCometClient.h"
-#import "DDCometMessage.h"
-#import "DDQueue.h"
 #import <SocketRocket/SRWebSocket.h>
 
-#define kDefaultConnectionTimeout 60.0
-#define kConnectionTimeoutVariance 5
-#define kMinPollTime 0.020  // The minimum time between polls in seconds
+#import "DDCometClient.h"
+#import "DDCometClientInternal.h"
+
+#import "DDCometMessage.h"
+
+#define kDefaultPingTimer 30.0
+
+extern void DDCometLog(NSString *format, ...);
 
 @interface DDCometWebSocketTransport () <SRWebSocketDelegate>
 
@@ -22,14 +25,14 @@
 
 @property (nonatomic, strong) SRWebSocket * webSocket;
 
-@property (nonatomic, strong) NSOperationQueue * operationQueue;
-
-/// YES if the client is connected to the realtime service
-@property (readonly, getter = isConnected) BOOL connected;
+@property (nonatomic, strong) NSTimer * pingTimer;
 
 @end
 
 @implementation DDCometWebSocketTransport
+{
+    dispatch_queue_t _dispatchQueue;
+}
 
 - (id)initWithClient:(DDCometClient *)client
 {
@@ -42,7 +45,7 @@
             [_cometClient addObserver:self forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
             }
         
-        self.operationQueue = [[NSOperationQueue alloc] init];
+        _dispatchQueue = dispatch_queue_create("ddcometclient.websocket.queue", DISPATCH_QUEUE_SERIAL);
         
         }
     return self;
@@ -58,25 +61,28 @@
             }
         @catch(id anException)
             {
-            //do nothing.  It wad previ
+            //do nothing.  It was previously removed
             }
         }
 }
 
 - (void)start
 {
-    [self.operationQueue addOperationWithBlock:^{
-        [self processMessages];
-    }];
+    [self processMessages];
 }
 
 - (void)cancel
 {
+    if (_pingTimer)
+        {
+        [_pingTimer invalidate];
+
+        _pingTimer = nil;
+        }
+    
     if (_webSocket)
         {
-        [_webSocket close];
-
-        _webSocket = nil;
+        [self disconnectWebSocket];
         }
     
     if (_cometClient != nil)
@@ -87,15 +93,16 @@
         }
 }
 
+- (DDCometSupportedTransport)supportedTransport
+{
+    return DDCometWebSocketSupportedTransport;
+}
+
 #pragma mark - DDQueueDelegate
 
 - (void)queueDidAddObject:(id<DDQueue>)queue
 {
-    typeof(self) weakSelf = self;
-    [self.operationQueue addOperationWithBlock:^{
-        typeof(weakSelf) strongSelf = weakSelf;
-        [strongSelf processMessages];
-    }];
+    [self processMessages];
 }
 
 #pragma mark -
@@ -107,11 +114,7 @@
         DDCometState state = (DDCometState)[(NSNumber *)[change objectForKey:NSKeyValueChangeNewKey] intValue];
         if (state == DDCometStateConnected)
             {
-            typeof(self) weakSelf = self;
-            [self.operationQueue addOperationWithBlock:^{
-                typeof(weakSelf) strongSelf = weakSelf;
-                [strongSelf processMessages];
-            }];
+            [self processMessages];
             [self setupPingTimer];
             }
         }
@@ -119,46 +122,53 @@
 
 - (void) processMessages
 {
-    NSMutableArray * messagesList = [NSMutableArray array];
-    
-    //1. Set up Long Polling if it is required
-    NSLog(@"SR State: %ul", _webSocket.readyState);
-    if (!_connected)
-        {
-        [self connectWebSocket];
-        return;
-        }
-    
-    if (_cometClient.state == DDCometStateConnected)
-        {
-        DDCometMessage *message = [DDCometMessage messageWithChannel:@"/meta/connect"];
-        message.clientID = _cometClient.clientID;
-        message.connectionType = @"websocket";
-        NSLog(@"Sending websocket message: %@", message);
-        [messagesList addObject:@[message]];
-        }
-    
-    //2. Send additional messages if present
-    NSArray *outgoingMessagesList = [self outgoingMessages];
-    
-    if ([outgoingMessagesList count] > 0)
-        {
-        [messagesList addObject:outgoingMessagesList];
-        }
-    
-    //3. Send all the messages
-    for (NSArray * messages in messagesList)
-        {
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(_dispatchQueue, ^{
+        __strong typeof(weakSelf) strongSelf = self;
         
-        if ([messages count] != 0)
+        if (!strongSelf)
             {
-            for (int i = 0; i < messages.count;i++)
+            return;
+            }
+        
+        NSMutableArray * messagesList = [NSMutableArray array];
+
+        SRWebSocket * webSocket = strongSelf.webSocket;
+        //1. Set up Long Polling if it is required
+        DDCometLog(@"SR State: %p, %ul", webSocket, webSocket.readyState);
+        if (webSocket == nil || webSocket.readyState == SR_CLOSED || webSocket.readyState == SR_CLOSING)
+            {
+            [strongSelf ensureConnected];
+            return;
+            }
+        
+        if (webSocket.readyState == SR_OPEN)
+            {
+            
+            //2. Send additional messages if present
+            NSArray *outgoingMessagesList = [strongSelf outgoingMessages];
+            
+            if ([outgoingMessagesList count] > 0)
                 {
-                NSDictionary * message = ((DDCometMessage*)messages[i]).proxyForJson;
-                [self writeMessageToWebSocket:message];
+                [messagesList addObject:outgoingMessagesList];
+                }
+            
+            //3. Send all the messages
+            for (NSArray * messages in messagesList)
+                {
+                
+                if ([messages count] != 0)
+                    {
+                    for (int i = 0; i < messages.count;i++)
+                        {
+                        NSDictionary * message = ((DDCometMessage*)messages[i]).proxyForJson;
+                        [strongSelf writeMessageToWebSocket:message];
+                        }
+                    }
                 }
             }
-        }
+    });
+
 }
 
 - (NSArray *)outgoingMessages
@@ -169,16 +179,6 @@
     while ((message = [outgoingQueue removeObject]))
         [messages addObject:message];
     return messages;
-}
-
-
--(NSTimeInterval)timeoutInterval
-{
-    NSNumber *timeout = (_cometClient.advice)[@"timeout"];
-    if (timeout)
-        return (([timeout floatValue] / 1000) + kConnectionTimeoutVariance);
-    else
-        return kDefaultConnectionTimeout;
 }
 
 #pragma mark - NSURLConnectionDelegate
@@ -232,22 +232,57 @@
         //If the time since connect is greater than the timeout interval, it means we were in the background and should ignore the connection failure
         if (_cometClient && sinceConnect < task.originalRequest.timeoutInterval)
             {
-            [_cometClient connectionFailedWithError:error withMessages:messages];
+            [_cometClient connection:self failedWithError:error withMessages:messages];
             }
         }
 }
 
+- (void)ensureConnected {
+    DDCometLog(@"ensureConnected, _socket.readyState = %d", _webSocket.readyState);
+    BOOL connect = NO;
+    if (_webSocket == nil)
+        {
+        connect = YES;
+        }
+    else
+        {
+        switch (_webSocket.readyState)
+            {
+            case SR_CLOSING:
+            case SR_CLOSED:
+                connect = YES;
+                break;
+            default:
+                break;
+            }
+        }
+    if (connect)
+        {
+        [self connectWebSocket];
+        }
+}
 
 
+- (BOOL) isConnected
+{
+    return _webSocket.readyState == SR_OPEN;
+}
 
 
 #pragma mark - WebSocket Methods
 
 - (void)connectWebSocket
 {
+    
     [self disconnectWebSocket];
     
-    NSURLRequest *request = [[NSURLRequest alloc] initWithURL:self.cometClient.endpointURL];
+    NSURL * url = self.cometClient.endpointURL;
+    if ([[url absoluteString] hasPrefix:@"http"])
+        {
+        url = [NSURL URLWithString:[NSString stringWithFormat:@"ws%@", [[url absoluteString] substringFromIndex:4]]];
+        }
+    
+    NSURLRequest *request = [[NSURLRequest alloc] initWithURL:url];
     self.webSocket = [[SRWebSocket alloc] initWithURLRequest:request];
     self.webSocket.delegate = self;
     [self.webSocket open];
@@ -258,7 +293,7 @@
     NSError *error = nil;
     NSData *jsonData = [NSJSONSerialization dataWithJSONObject:message options:0 error:&error];
     if (error) {
-        [self.cometClient connectionFailedWithError:error withMessages:@[message]];
+        [self.cometClient connection:self failedWithError:error withMessages:@[message]];
     } else {
         NSString *json = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
         [self.webSocket send:json];
@@ -267,28 +302,34 @@
 
 - (void)setupPingTimer
 {
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, [self timeoutInterval] * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-        [self pingWebSocket];
-    });
+    if (_pingTimer)
+        {
+        [_pingTimer invalidate];
+        _pingTimer = nil;
+        }
+    _pingTimer = [NSTimer timerWithTimeInterval:kDefaultPingTimer target:self selector:@selector(pingWebSocket) userInfo:nil repeats:YES];
+    [[NSRunLoop mainRunLoop] addTimer:_pingTimer forMode:NSRunLoopCommonModes];
+    
 }
 
 - (void)pingWebSocket
 {
     if (self.isConnected) {
         // send an empty array to do nothing, but keep the socket open
-        NSLog(@"Sending ping...");
+        DDCometLog(@"Sending ping...");
         [self.webSocket send:@"[]"];
-        [self setupPingTimer];
     }
 }
 
 - (void)disconnectWebSocket
 {
-    _connected = NO;
-    self.webSocket.delegate = nil;
-    [self.webSocket close];
-    self.webSocket = nil;
-    [NSObject cancelPreviousPerformRequestsWithTarget:self];
+    if (self.webSocket != nil)
+        {
+        self.webSocket.delegate = nil;
+        [self.webSocket close];
+        self.webSocket = nil;
+        [NSObject cancelPreviousPerformRequestsWithTarget:self];
+        }
 }
 
 
@@ -296,17 +337,15 @@
 
 - (void)webSocketDidOpen:(SRWebSocket *)webSocket
 {
-    [self.operationQueue addOperationWithBlock:^{
-        if (webSocket.readyState == SR_OPEN)
-            {
-            _connected = YES;
-            [self processMessages];
-            }
-        else
-            {
-            NSLog(@"WebSocket State is not ready state");
-            }
-    }];
+    DDCometLog(@"SRDidOpen State: %p, %ul", webSocket, webSocket.readyState);
+    if (webSocket.readyState == SR_OPEN)
+        {
+        [self processMessages];
+        }
+    else
+        {
+        DDCometLog(@"WebSocket State is not ready state");
+        }
 }
 
 - (void)webSocket:(SRWebSocket *)webSocket didReceiveMessage:(id)message
@@ -318,7 +357,7 @@
     NSError *error = nil;
     NSArray *messages = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
     if (error) {
-        [self.cometClient connectionFailedWithError:error withMessages:message];
+        [self.cometClient connection:self failedWithError:error withMessages:message];
     } else {
         if (_cometClient) {
             id<DDQueue> incomingQueue = [_cometClient incomingQueue];
@@ -333,13 +372,25 @@
 
 - (void)webSocket:(SRWebSocket *)webSocket didFailWithError:(NSError *)error
 {
-    [self.cometClient connectionFailedWithError:error withMessages:nil];
+    //Need a better way to handle Switching to Long Polling from Websocket communication when it fails.
+    if(error.code == 57)
+        {
+        [self ensureConnected];
+        }
+    else if ([error.domain isEqualToString:@"org.lolrus.SocketRocket"] && error.code == 2132)
+        {
+        [self.cometClient transportDidFail:self];
+        }
+    else
+        {
+        [self.cometClient connection:self failedWithError:error withMessages:nil];
+        }
 }
 
 - (void)webSocket:(SRWebSocket *)webSocket didCloseWithCode:(NSInteger)code reason:(NSString *)reason wasClean:(BOOL)wasClean
 {
     [self disconnectWebSocket];
-    
+    [self ensureConnected];
     {
         NSDictionary *errorInfo = @{NSLocalizedDescriptionKey: @"The WebSocket encountered an error."};
         if (reason) {
@@ -348,8 +399,8 @@
             errorInfo = mutableErrorInfo;
         }
         
-        NSError *error = [NSError errorWithDomain:@"com.bmatcuk.BayeuxClient.WebSocketError" code:code userInfo:errorInfo];
-        [self.cometClient connectionFailedWithError:error withMessages:nil];
+        NSError *error = [NSError errorWithDomain:@"org.cometd.BayeuxClient.WebSocketError" code:code userInfo:errorInfo];
+    [self.cometClient connection:self failedWithError:error withMessages:nil];
     }
 }
 

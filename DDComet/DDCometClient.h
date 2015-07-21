@@ -1,12 +1,12 @@
 
 #import <Foundation/Foundation.h>
+#import "DDCometTransport.h"
+#import "DDCometMessage.h"
+#import "DDCometSubscription.h"
 
-
-@class DDCometMessage;
-@class DDCometSubscription;
 @protocol DDCometClientDelegate;
-@protocol DDQueue;
-@protocol DDCometLongPollingTransport;
+@protocol DDCometClientSubscriptionDelegate;
+@protocol DDCometClientDataDelegate;
 
 typedef enum
 {
@@ -18,18 +18,24 @@ typedef enum
     DDCometStateTransportError
 } DDCometState;
 
-@protocol DDCometClientSubscriptionDelegate;
-@protocol DDCometClientDataDelegate;
 
 #pragma mark - DDCometClient
 
 @interface DDCometClient : NSObject
 
-@property (nonatomic, readonly) NSString *clientID;
+
 @property (nonatomic, readonly) NSURL *endpointURL;
+
+@property (nonatomic, assign) DDCometSupportedTransport supportedTransports;
+
+@property (strong) NSDictionary * handshakeData;
+
 @property (nonatomic, readonly) DDCometState state;
-@property (nonatomic, readonly) NSDictionary *advice;
+
+@property (nonatomic, readonly) NSString *clientID;
+
 @property (nonatomic, weak) id<DDCometClientDelegate> delegate;
+
 @property (nonatomic, assign) BOOL allowDuplicateSubscriptions;
 
 //Should we reconnect automatically and create a new client session if the session we were using expired
@@ -42,11 +48,11 @@ typedef enum
 //     If set to YES (default) and you would need to call 'unsubscribeAll' after calling 'disconnect' if you don't want subscriptions to resubscribe automatically when 'handshake' is called
 @property (nonatomic, assign) BOOL persistentSubscriptions; // Default to YES
 
-@property (nonatomic, strong) NSDictionary * handshakeData;
-
+//Allow callbacks to happen off the main thread
 @property (nonatomic, strong) dispatch_queue_t callbackQueue;
 
-- (id)initWithURL:(NSURL *)endpointURL;
+
+- (instancetype)initWithURL:(NSURL *)endpointURL;
 
 - (DDCometMessage *)handshake;
 
@@ -56,9 +62,12 @@ typedef enum
 
 - (DDCometSubscription *)subscribeToChannel:(NSString *)channel target:(id)target selector:(SEL)selector;
 
+- (DDCometSubscription *)subscribeToChannel:(NSString *)channel extensions:(id)extensions target:(id)target selector:(SEL)selector;
+
 - (DDCometSubscription *)subscribeToChannel:(NSString *)channel target:(id)target selector:(SEL)selector delegate:(id<DDCometClientSubscriptionDelegate>)delegate;
 
 - (DDCometSubscription *)subscribeToChannel:(NSString *)channel target:(id)target selector:(SEL)selector successBlock:(void(^)(DDCometClient*,DDCometSubscription*))successBlock errorBlock:(void(^)(DDCometClient*,DDCometSubscription*,NSError*))errorBlock;
+
 
 - (DDCometMessage *)unsubsubscribeFromChannel:(NSString *)channel target:(id)target selector:(SEL)selector;
 
@@ -73,46 +82,6 @@ typedef enum
                      errorBlock:(void(^)(DDCometClient*,id,NSString*,NSError*))errorBlock;
 
 - (void) unsubscribeAll;
-
-@end
-
-#pragma mark - DDCometClient (Internal)
-
-@interface DDCometClient (Internal)  //Should not be accessed externally
-
-- (id<DDQueue>)outgoingQueue;
-
-- (id<DDQueue>)incomingQueue;
-
-- (void) connectionFailedWithError:(NSError*)error withMessages:(NSArray*)messages;
-
-- (void) messagesDidSend:(NSArray*)messages;
-
-- (id<DDCometClientDataDelegate>)delegateForMessage:(DDCometMessage*)message;
-
-- (void)handleMessage:(DDCometMessage *)message;
-
-@end
-
-#pragma mark - DDCometClientSubscriptionDelegate
-
-@protocol DDCometClientSubscriptionDelegate <NSObject>
-@optional
-
-- (void)cometClient:(DDCometClient *)client subscriptionDidSucceed:(DDCometSubscription *)subscription;
-
-- (void)cometClient:(DDCometClient *)client subscription:(DDCometSubscription *)subscription didFailWithError:(NSError *)error;
-
-@end
-
-#pragma mark - DDCometClientDataDelegate
-
-@protocol DDCometClientDataDelegate <NSObject>
-@optional
-
-- (void)cometClient:(DDCometClient*)client dataDidSend:(id)data toChannel:(NSString*)channel;
-
-- (void)cometClient:(DDCometClient*)client data:(id)data toChannel:(NSString*)channel didFailWithError:(NSError*)error;
 
 @end
 
@@ -138,3 +107,26 @@ typedef enum
 - (void)cometClientExpired:(DDCometClient*)client;
 
 @end
+
+#pragma mark - DDCometClientSubscriptionDelegate
+
+@protocol DDCometClientSubscriptionDelegate <NSObject>
+@optional
+
+- (void)cometClient:(DDCometClient *)client subscriptionDidSucceed:(DDCometSubscription *)subscription;
+
+- (void)cometClient:(DDCometClient *)client subscription:(DDCometSubscription *)subscription didFailWithError:(NSError *)error;
+
+@end
+
+#pragma mark - DDCometClientDataDelegate
+
+@protocol DDCometClientDataDelegate <NSObject>
+@optional
+
+- (void)cometClient:(DDCometClient*)client dataDidSend:(id)data toChannel:(NSString*)channel;
+
+- (void)cometClient:(DDCometClient*)client data:(id)data toChannel:(NSString*)channel didFailWithError:(NSError*)error;
+
+@end
+

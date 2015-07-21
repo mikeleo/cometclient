@@ -1,10 +1,9 @@
 
 #import <Foundation/Foundation.h>
-#import "DDCometLongPollingTransport.h"
-#import "DDQueue.h"
+#import "DDCometTransport.h"
 
 @class DDCometClient;
 
-@interface DDCometURLSessionLongPollingTransport : NSObject <DDCometLongPollingTransport, DDQueueDelegate>
+@interface DDCometURLSessionLongPollingTransport : NSObject <DDCometTransport>
 
 @end

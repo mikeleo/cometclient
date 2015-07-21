@@ -3,9 +3,9 @@
  */
 #import "DDCometURLSessionLongPollingTransport.h"
 #import "DDCometClient.h"
-#import "DDCometMessage.h"
-#import "DDQueue.h"
+#import "DDCometClientInternal.h"
 
+#import "DDCometMessage.h"
 
 #define kDefaultConnectionTimeout 60.0
 #define kConnectionTimeoutVariance 5
@@ -14,8 +14,6 @@
 @interface DDCometURLSessionLongPollingTransport () <NSURLSessionTaskDelegate>
     
 @property (nonatomic, weak) DDCometClient * cometClient;
-
-@property (nonatomic, assign) BOOL polling;
 
 @property (nonatomic, strong) NSDate * lastPoll;
 
@@ -74,8 +72,11 @@
 
 - (void)start
 {
+    
+    typeof(self) weakSelf = self;
     [self.operationQueue addOperationWithBlock:^{
-        [self processMessages];
+        typeof(weakSelf) strongSelf = weakSelf;
+        [strongSelf processMessages];
     }];
 }
 
@@ -99,6 +100,12 @@
     }
 }
 
+
+- (DDCometSupportedTransport)supportedTransport
+{
+    return DDCometLongPollingSupportedTransport;
+}
+
 #pragma mark - DDQueueDelegate
 
 - (void)queueDidAddObject:(id<DDQueue>)queue
@@ -111,20 +118,6 @@
 }
 
 #pragma mark -
-
-- (void)setPolling:(BOOL)polling
-{
-    _polling = polling;
-    
-    if (!polling)
-        {
-        typeof(self) weakSelf = self;
-        [self.operationQueue addOperationWithBlock:^{
-            typeof(weakSelf) strongSelf = weakSelf;
-            [strongSelf processMessages];
-        }];
-        }
-}
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
 {
@@ -144,34 +137,34 @@
 
 - (void) processMessages
 {
-    NSMutableArray * messagesList = [NSMutableArray array];
+    // List of Lists
+    NSMutableArray * messagesLists = [NSMutableArray array];
     
-    //1. Set up Long Polling if it is required
-    NSLog(@"State: %ul, Polling: %@, LastPoll: %@, Interval: %f", _cometClient.state, _polling ? @"YES" : @"NO", _lastPoll, fabs([_lastPoll timeIntervalSinceNow]));
-    if (_cometClient.state == DDCometStateConnected && !_polling && (!_lastPoll || fabs([_lastPoll timeIntervalSinceNow]) > kMinPollTime))
-    {
-        self.polling = YES;
-        DDCometMessage *message = [DDCometMessage messageWithChannel:@"/meta/connect"];
-        message.clientID = _cometClient.clientID;
-        message.connectionType = @"long-polling";
-        NSLog(@"Sending long-poll message: %@", message);
-        [messagesList addObject:@[message]];
-        _lastPoll = [NSDate date];
-    }
-
-    //2. Send additional messages if present
-    NSArray *outgoingMessagesList = [self outgoingMessages];
+    //1. Pull out /meta/connect if present and send separately
+    NSMutableArray *outgoingMessagesList = [NSMutableArray array];
+    
+    for (DDCometMessage * message in [self outgoingMessages])
+        {
+        if ([message.channel isEqualToString:@"/meta/connect"])
+            {
+            [messagesLists addObject:@[message]];
+            }
+        else
+            {
+            [outgoingMessagesList addObject:message];
+            }
+        }
     
     if ([outgoingMessagesList count] > 0)
         {
-        [messagesList addObject:outgoingMessagesList];
+        [messagesLists addObject:outgoingMessagesList];
         }
-
-    //3. Send all the messages
-    for (NSArray * messages in messagesList)
+    
+    //2. Send all the message
+    for (NSArray * messageList in messagesLists)
         {
         NSURLSessionDataTask *sessionDataTask =
-            [self sendMessages:messages
+            [self sendMessages:messageList
                success:^(NSURLSessionDataTask *task, id responseObject, NSDate *timeStamp, NSArray *messages) {
                    [self connectionDidFinishWithSuccess:task responseObject:responseObject timeStamp:timeStamp messages:messages];
                } failure:^(NSURLSessionDataTask *task, NSError *error, NSDate *timeStamp, NSArray *messages) {
@@ -280,11 +273,7 @@
 
 -(NSTimeInterval)timeoutInterval
 {
-    NSNumber *timeout = (_cometClient.advice)[@"timeout"];
-	if (timeout)
-        return (([timeout floatValue] / 1000) + kConnectionTimeoutVariance);
-    else
-        return kDefaultConnectionTimeout;
+    return kDefaultConnectionTimeout;
 }
 
 #pragma mark - NSURLConnectionDelegate
@@ -294,25 +283,21 @@
 {
 	NSArray *responses = responseObject;
     
-    if (_cometClient) {
+    if (_cometClient)
+        {
         id<DDQueue> incomingQueue = [_cometClient incomingQueue];
 
         for (NSDictionary *messageData in responses)
-        {
+            {
             DDCometMessage *message = [DDCometMessage messageWithJson:messageData];
-            if (_polling && [message.channel isEqualToString:@"/meta/connect"]) {
-                self.polling = NO;
-            }
             [incomingQueue addObject:message];
-        }
+            }
         [_cometClient messagesDidSend:messages];
-    }
+        }
 }
 
 - (void)connectionDidFinishWithError:(NSURLSessionDataTask *)task error:(NSError *)error timeStamp:(NSDate *) timeStamp messages:(NSArray *) messages
 {
-    
-    self.polling = NO;
     
     if (((NSHTTPURLResponse *)task.response).statusCode == 403)
         {
@@ -330,9 +315,6 @@
             for (NSDictionary *messageData in responses)
                 {
                 DDCometMessage *message = [DDCometMessage messageWithJson:messageData];
-                if (_polling && [message.channel isEqualToString:@"/meta/connect"]) {
-                    self.polling = NO;
-                }
                 [incomingQueue addObject:message];
                 }
             [_cometClient messagesDidSend:messages];
@@ -345,7 +327,7 @@
         //If the time since connect is greater than the timeout interval, it means we were in the background and should ignore the connection failure
         if (_cometClient && sinceConnect < task.originalRequest.timeoutInterval)
             {
-            [_cometClient connectionFailedWithError:error withMessages:messages];
+            [_cometClient connection:self failedWithError:error withMessages:messages];
             }
         }
 }

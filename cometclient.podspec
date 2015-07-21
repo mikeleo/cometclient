@@ -52,7 +52,8 @@ Pod::Spec.new do |s|
   #  profile URL.
   #
 
-  s.authors             = {  "Dave Dunkin" => "",
+  s.authors             = {  "Dave Dunkin" => "dave.dunkin@logos.com",
+                            "yinzara" => "yinzara@gmail.com",
                             "Mike Leo" => "mike@unrealexpectations.com" }
 
   # ――― Platform Specifics ――――――――――――――――――――――――――――――――――――――――――――――――――――――― #

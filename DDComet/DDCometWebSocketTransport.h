@@ -7,9 +7,8 @@
 //
 
 #import <Foundation/Foundation.h>
-#import "DDCometLongPollingTransport.h"
-#import "DDQueue.h"
+#import "DDCometTransport.h"
 
-@interface DDCometWebSocketTransport : NSObject <DDCometLongPollingTransport, DDQueueDelegate>
+@interface DDCometWebSocketTransport : NSObject <DDCometTransport>
 
 @end
