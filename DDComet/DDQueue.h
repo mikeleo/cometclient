@@ -9,6 +9,9 @@
 - (void)addObject:(id)object;
 - (id)removeObject;
 
+- (BOOL) containsMessage:(NSString *)messsage;
+
+
 @optional
 - (void)setDelegate:(id<DDQueueDelegate>)delegate;
 

@@ -152,16 +152,48 @@ extern void DDCometLog(NSString *format, ...);
                 {
                 [messagesList addObject:outgoingMessagesList];
                 }
-            
-            //3. Send all the messages
-            for (NSArray * messages in messagesList)
+
+            //3. Find latest /meta/handshake
+            NSMutableArray * filteredMessageList = [NSMutableArray array];
+            BOOL breakInner = NO;
+            for (NSArray * messages in [messagesList reverseObjectEnumerator])
                 {
+                if ([messages count] != 0)
+                    {
+                    NSMutableArray * filteredMessages = [NSMutableArray array];
+                    for (int i = (int)messages.count - 1; i >= 0; i--)
+                        {
+                        DDCometMessage * cometMessage = (DDCometMessage*)messages[i];
+                        if ([cometMessage.channel isEqualToString:@"/meta/handshake"])
+                            {
+                            breakInner = YES;
+                            }
+                        
+                        [filteredMessages insertObject:cometMessage atIndex:0];
+                        if (breakInner)
+                            {
+                            break;
+                            }
+                        }
                 
+                    [filteredMessageList insertObject:filteredMessages atIndex:0];
+                    if (breakInner)
+                        {
+                        break;
+                        }
+                    }
+                }
+            
+            //4. Send all the messages
+            for (NSArray * messages in filteredMessageList)
+                {
                 if ([messages count] != 0)
                     {
                     for (int i = 0; i < messages.count;i++)
                         {
-                        NSDictionary * message = ((DDCometMessage*)messages[i]).proxyForJson;
+                        DDCometMessage * cometMessage = (DDCometMessage*)messages[i];
+                        
+                        NSDictionary * message = cometMessage.proxyForJson;
                         [strongSelf writeMessageToWebSocket:message];
                         }
                     }

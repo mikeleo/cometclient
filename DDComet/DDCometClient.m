@@ -112,7 +112,7 @@ extern void DDCometLog(NSString *format, ...);
 
 - (DDCometMessage *)handshakeWithData:(NSDictionary *)data
 {
-    if (_state == DDCometStateConnecting)
+    if (_state == DDCometStateConnecting || _state == DDCometStateHandshaking)
         {
         DDCometLog(@"Only one pending handshake allowed at one time.");
         return nil;
@@ -808,14 +808,15 @@ extern void DDCometLog(NSString *format, ...);
                     });
                     }
                 
+                void (^sendConnectMessage)(void) = ^{
+                    DDCometMessage *message = [DDCometMessage messageWithChannel:@"/meta/connect"];
+                    message.clientID = self.clientID;
+                    message.connectionType = @"websocket";
+                    [self sendMessage:message];
+                };
+                
                 if (message.advice != nil)
                     {
-                    void (^sendConnectMessage)(void) = ^{
-                        DDCometMessage *message = [DDCometMessage messageWithChannel:@"/meta/connect"];
-                        message.clientID = self.clientID;
-                        message.connectionType = @"websocket";
-                        [self sendMessage:message];
-                    };
                     
                     NSString * reconnect = [message.advice objectForKey:@"reconnect"];
                     NSNumber * interval = [message.advice objectForKey:@"interval"];
@@ -830,6 +831,10 @@ extern void DDCometLog(NSString *format, ...);
                             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)([interval integerValue] * NSEC_PER_SEC)), dispatch_get_main_queue(), sendConnectMessage);
                             }
                         }
+                    }
+                else
+                    {
+                    sendConnectMessage();
                     }
                 
                 @synchronized(_subscriptions) {
