@@ -71,6 +71,7 @@ Pod::Spec.new do |s|
   #
 
 #s.source       = { :git => "https://github.com/mikeleo/cometclient.git", :commit => "fc6f07b40730083f88ea8d7e81aad2a1900e7d2f" }
+s.source = { :git => "https://github.com/mikeleo/cometclient.git"}
 
 
   # ――― Source Code ―――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――― #
